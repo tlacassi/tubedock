@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Compte · TubeDock</title><link rel="stylesheet" href="/auth.css"><script src="/auth.js" defer></script></head>
+<body><main><header><a href="/">▶ TUBEDOCK</a><nav id="account"></nav></header>
+<section id="credentials" hidden><p class="eyebrow">VOTRE ESPACE PERSONNEL</p><h1 id="title">Connexion</h1><p id="description"></p>
+<form id="credentials-form"><label id="username-label">Identifiant<input id="username" name="username" required minlength="3" maxlength="32" autocomplete="username" pattern="[a-zA-Z0-9_-]+"></label>
+<label>Mot de passe<input id="password" name="password" type="password" required minlength="8" maxlength="128" autocomplete="current-password"></label>
+<label id="confirm-label" hidden>Confirmer le mot de passe<input id="confirm" type="password" minlength="8" maxlength="128" autocomplete="new-password"></label>
+<button id="submit" type="submit">Se connecter</button></form></section>
+<section id="administration" hidden><p class="eyebrow">ADMINISTRATION</p><h1>Gérer les accès</h1><p>Les invitations sont utilisables une seule fois et expirent après 7 jours.</p>
+<form id="invite-form"><label>Nom de l’invitation<input id="label" required maxlength="80" placeholder="Ex. : invitation pour Alex"></label><button type="submit">Créer un lien d’invitation</button></form>
+<section id="new-link" hidden><label>Lien à transmettre<input id="invite-link" readonly></label><button id="copy" type="button">Copier le lien</button><p>Ce lien secret n’est affiché qu’une fois. Son destinataire choisira son identifiant et son mot de passe.</p></section>
+<h2>Comptes</h2><div class="table-wrap"><table><thead><tr><th>Identifiant</th><th>État</th><th>Action</th></tr></thead><tbody id="users"></tbody></table></div>
+<h2>Invitations</h2><div class="table-wrap"><table><thead><tr><th>Nom</th><th>État</th><th>Expiration</th><th>Action</th></tr></thead><tbody id="invites"></tbody></table></div>
+<p>Révoquer un compte ferme toutes ses sessions. Révoquer une invitation déjà utilisée ne révoque pas le compte créé : utilise la liste des comptes.</p></section>
+<p id="message" role="status" aria-live="polite"></p></main></body></html>

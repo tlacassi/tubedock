@@ -8,6 +8,8 @@ import threading
 import time
 import uuid
 import unicodedata
+import sqlite3
+import auth
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
@@ -109,6 +111,17 @@ def convert(key, url, fmt):
 
 
 class Handler(BaseHTTPRequestHandler):
+    def setup(self):
+        super().setup()
+        self.connection.settimeout(10)
+
+    def end_headers(self):
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('Referrer-Policy', 'no-referrer')
+        self.send_header('X-Frame-Options', 'DENY')
+        self.send_header('Content-Security-Policy', "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'")
+        super().end_headers()
+
     def log_message(self, format, *args):
         pass
 
@@ -122,6 +135,17 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self):
+        try:
+            self.post()
+        except auth.AuthError as error:
+            auth.reply(self, error.status, {'error': str(error)})
+        except sqlite3.Error:
+            auth.reply(self, 503, {'error': 'Authentification temporairement indisponible.'})
+
+    def post(self):
+        if auth.post(self, self.path):
+            return
+        user = auth.require(self, csrf=True)
         if self.path != '/api/jobs':
             return self.send_json(404, {'error': 'Introuvable.'})
         try:
@@ -141,12 +165,30 @@ class Handler(BaseHTTPRequestHandler):
             if sum(j['status'] in ('queued', 'processing') for j in jobs.values()) >= MAX_JOBS:
                 return self.send_json(429, {'error': 'La file est pleine. Réessaie dans quelques instants.'})
             key = uuid.uuid4().hex
-            jobs[key] = {'status': 'queued', 'format': fmt}
+            jobs[key] = {'status': 'queued', 'format': fmt, 'owner': user['id']}
         threading.Thread(target=convert, args=(key, url, fmt), daemon=True).start()
         self.send_json(202, {'id': key})
 
     def do_GET(self):
+        try:
+            self.get()
+        except auth.AuthError as error:
+            if error.status == 401 and not self.path.startswith(('/api/', '/auth/')):
+                self.send_response(303)
+                self.send_header('Location', '/login')
+                self.send_header('Content-Length', '0')
+                self.send_header('Cache-Control', 'no-store')
+                self.end_headers()
+            else:
+                auth.reply(self, error.status, {'error': str(error)})
+        except sqlite3.Error:
+            auth.reply(self, 503, {'error': 'Authentification temporairement indisponible.'})
+
+    def get(self):
         path = urlparse(self.path).path
+        if auth.get(self, path):
+            return
+        user = auth.require(self)
         if path in ('/', '/style.css', '/app.js'):
             name = {'/': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js'}[path]
             data = (ROOT / 'static' / name).read_bytes()
@@ -162,7 +204,7 @@ class Handler(BaseHTTPRequestHandler):
         key = match.group(1)
         with lock:
             job = jobs.get(key, {}).copy()
-            if not job:
+            if not job or job.get('owner') != user['id']:
                 return self.send_json(404, {'error': 'Ce lien a expiré ou est introuvable.'})
             if match.group(2):
                 if job['status'] != 'ready':
@@ -172,7 +214,7 @@ class Handler(BaseHTTPRequestHandler):
                 except OSError:
                     return self.send_json(404, {'error': 'Fichier indisponible.'})
             else:
-                return self.send_json(200, job)
+                return self.send_json(200, {name: value for name, value in job.items() if name != 'owner'})
         with file:
             self.send_response(200)
             self.send_header('Content-Type', 'audio/mpeg' if job['format'] == 'mp3' else 'video/mp4')
@@ -188,6 +230,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    auth.initialize()
     DATA.mkdir(parents=True, exist_ok=True)
     for item in DATA.iterdir():
         if item.is_dir() and re.fullmatch(r'[0-9a-f]{32}', item.name):

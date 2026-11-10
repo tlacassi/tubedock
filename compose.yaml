@@ -5,6 +5,7 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - converter-data:/data
+      - converter-auth:/auth
     restart: unless-stopped
     init: true
     security_opt:
@@ -13,3 +14,4 @@ services:
       - ALL
 volumes:
   converter-data:
+  converter-auth:
